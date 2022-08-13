@@ -5,6 +5,7 @@ A Minetest mod to build rails with tunnels and bridges with a simple click.
 - Use the trainmarker tool to mark the start of a rail with a right click.
 - Right click at the desired end point (shown if you are close enough) or
 - Right click on the current start marker to stop building.
+- Hold down left mouse button and look up or down to set a slope, left click to reset.
 
 ### What does it do?
 - This will trigger tunnelmaker to build tunnels / bridges / ground according to your settings.
@@ -20,6 +21,7 @@ A Minetest mod to build rails with tunnels and bridges with a simple click.
 - Expect bugs which eventually make your world unloadable!
 - Building > 10 blocks will result in lags.
 - Please report any issues you encounter.
+- No idea yet how to make this mobile-friendly.
 
 ### Dependencies
 - [advtrains and advtrains_train_track](https://content.minetest.net/packages/orwell/advtrains/)
