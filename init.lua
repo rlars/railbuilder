@@ -214,7 +214,7 @@ end
 
 minetest.register_craftitem("railbuilder:trackmarker", {
 	description = "Move",
-	inventory_image = "conquer_wand_move.png",
+	inventory_image = "railbuilder_trackmarker.png",
 	on_use = on_use_callback,
 	on_secondary_use = use_railbuilder_marker_tool,
 	on_place = use_railbuilder_marker_tool
