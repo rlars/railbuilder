@@ -1,0 +1,16 @@
+# Blender v2.82 (sub 7) OBJ File: 'selection_disc.blend'
+# www.blender.org
+mtllib conquer_selection_disc.mtl
+o Plane
+v -1.000000 0.000000 1.000000
+v 1.000000 0.000000 1.000000
+v -1.000000 0.000000 -1.000000
+v 1.000000 0.000000 -1.000000
+vt 0.000000 1.000000
+vt 0.000000 0.000000
+vt 1.000000 0.000000
+vt 1.000000 1.000000
+vn 0.0000 1.0000 0.0000
+usemtl None
+s off
+f 1/1/1 2/2/1 4/3/1 3/4/1
