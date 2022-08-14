@@ -17,7 +17,6 @@ function datastore.get_data(player)
 	if not datastore._data[player] then
 		datastore._data[player] =
 		{
-			railbuilder_start_marker = nil,
 			railbuilder_start_pos = vector.new(0, 0, 0),
 			railbuilder_built_last_node = false, -- UNUSED; if last node of previous track was built
 			railbuilder_last_direction = nil, -- direction of previous track
@@ -27,6 +26,7 @@ function datastore.get_data(player)
 				hud_slope_selection_points = {},
 				hud_track_preview_points = {},
 				hud_update_last_player_pos = vector.new(0, 0, 0),
+				railbuilder_start_marker = nil,
 			},
 		}
 	end

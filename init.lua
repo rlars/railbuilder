@@ -11,20 +11,21 @@ dofile(railbuilder_path.."/railbuilder_ui.lua");
 
 -- tries to find values for last_direction from the underlying node
 local function try_initialize_last_direction(player, pos)
-	player_data = railbuilder.datastore.get_data(player)
-	node = minetest.get_node(pos)
+	local player_data = railbuilder.datastore.get_data(player)
+	local node = minetest.get_node(pos)
 	player_data.railbuilder_last_direction, player_data.railbuilder_last_vertical_direction = advtrain_helpers.node_params_to_directions(node)
 end
 
 local function use_railbuilder_marker_tool(_, user, pointed_thing)
-	player_data = railbuilder.datastore.get_data(user)
-	
+	local player_data = railbuilder.datastore.get_data(user)
+	local target_pos = nil
+
 	if get_selected_position(user) then
 		target_pos = get_selected_position(user)
 	elseif false and pointed_thing.type == "nothing" then
-		player_pos = vector.add(user:get_pos(),user:get_eye_offset())
-		destination = vector.add(player_pos, vector.multiply(user:get_look_dir(), 50))
-		hits = Raycast(player_pos, destination)
+		local player_pos = vector.add(user:get_pos(),user:get_eye_offset())
+		local destination = vector.add(player_pos, vector.multiply(user:get_look_dir(), 50))
+		local hits = Raycast(player_pos, destination)
 		local thing = hits:next()
 		local hit = nil
 		while thing do
@@ -49,18 +50,21 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 		return
 	end
 	
-	did_try_build = false
-	did_build = false
+	local did_try_build = false
+	local did_build = false
 	
-	if player_data.railbuilder_start_marker then
+	if is_start_marker_valid(user) then
 		did_try_build = true
-		remove_railbuilder_start_marker(user)
+		remove_start_marker(user)
 		
-		railbuilder_start_pos = player_data.railbuilder_start_pos		
-		delta_pos = vector.subtract(target_pos, railbuilder_start_pos)
-		direction_delta = delta_to_dir(delta_pos)
-		can_build = can_build_rail(railbuilder_start_pos, target_pos)
-		if can_build then
+		local railbuilder_start_pos = player_data.railbuilder_start_pos		
+		local delta_pos = vector.subtract(target_pos, railbuilder_start_pos)
+		local direction_delta = delta_to_dir(delta_pos)
+		local can_build = can_build_rail(railbuilder_start_pos, target_pos)
+
+		if not tunnelmaker_helpers.is_supported_tunnelmaker_version() then
+			minetest.chat_send_player(user:get_player_name(), "Sorry for the confusion, but this version of tunnelmaker is not supported! Look at the documentation of railbuilder for information on how to fix this: https://github.com/rlars/railbuilder")
+		elseif can_build then
 			build_rail(user, railbuilder_start_pos, target_pos, true or delta_pos.y <= 0)
 			did_build = true
 			if delta_pos.y > 0 then
@@ -88,16 +92,8 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 				target_pos.y = target_pos.y + 1
 			end
 		end
-		-- assert player_data.railbuilder_start_marker == nil
-		-- check if there is already a track
-		-- TODO: get direction from node on first use
-		-- adj1, adj2 = advtrain_helpers.find_already_connected(target_pos, player_data.railbuilder_last_direction)
-		railbuilder_start_marker_pos = vector.new(target_pos.x, target_pos.y, target_pos.z) --table.copy(target_pos)
-		-- for positive slope, move the start marker a little bit down
-		if direction_delta and direction_delta.y > 0 then railbuilder_start_marker_pos.y = railbuilder_start_marker_pos.y - direction_delta.y end
-		railbuilder_start_marker = minetest.add_entity(railbuilder_start_marker_pos, "railbuilder:selection")
 		player_data.railbuilder_start_pos = target_pos
-		player_data.railbuilder_start_marker = railbuilder_start_marker
+		set_start_marker(user, target_pos, direction_delta)
 	end
 	
 	update_hud(user, true)
@@ -106,36 +102,23 @@ end
 function update_railbuilder_callback(dtime)
 
 	for _, player in pairs(railbuilder.datastore.get_players()) do
-	
-		player_data = railbuilder.datastore.get_data(player)
-		
-		if player_data.railbuilder_start_marker and not player_data.railbuilder_start_marker:get_luaentity() then
+		if is_start_marker_lost(player) then
 			-- abort if start_pos was unloaded
-			remove_railbuilder_start_marker(user)
+			remove_start_marker(player)
 			minetest.chat_send_player(player:get_player_name(), "Railbuilder: Start point is too far away, cancelling!")
-			update_hud(player, force)
-			return
-		end
-		
-		
-		force_by_slope_selection_ui = false
-		-- slope ui
-		if player:get_player_control().dig then
-			force_by_slope_selection_ui = update_slope_selection_ui(player)
+			update_hud(player, true)
 		else
-			hide_slope_selection_ui(player)
+			update_hud(player, false)
 		end
-		
-		update_hud(player, force_by_slope_selection_ui)
 	end
 end
 
 function can_build_rail(start_pos, end_pos)
-	valid_xz_ratios = { -2, -1, -0.5, 0.5, 1, 2 }
-	valid_dy_ratios = { -0.5, -1/3, 0, 1/3, 0.5 }
-	valid_xzy_ratios = { -0.5/math.sqrt(2), 0, 0.5/math.sqrt(2) }
+	local valid_xz_ratios = { -2, -1, -0.5, 0.5, 1, 2 }
+	local valid_dy_ratios = { -0.5, -1/3, 0, 1/3, 0.5 }
+	local valid_xzy_ratios = { -0.5/math.sqrt(2), 0, 0.5/math.sqrt(2) }
 	
-	delta_pos = vector.subtract(end_pos, start_pos)
+	local delta_pos = vector.subtract(end_pos, start_pos)
 	
 	if delta_pos.x ~= 0 and delta_pos.z ~= 0 and table.indexof(valid_xz_ratios, delta_pos.x / delta_pos.z) ~= -1 then
 		if math.abs(delta_pos.x) == math.abs(delta_pos.z) then
@@ -156,15 +139,15 @@ end
 
 -- build a rail with a fixed direction
 function build_rail(player, start_pos, end_pos, build_last_node)
-	delta_pos = vector.subtract(end_pos, start_pos)
-	rail_node_params_seq = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
-	direction_delta = delta_to_dir(delta_pos)
-	current_pos = table.copy(start_pos)
+	local delta_pos = vector.subtract(end_pos, start_pos)
+	local rail_node_params_seq = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
+	local direction_delta = delta_to_dir(delta_pos)
+	local current_pos = table.copy(start_pos)
 	current_pos.y = current_pos.y - 0.2 -- decrement a little bit, because y values will be rounded for slope placement
-	tunnelmaker_horizontal_direction = advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)
+	local tunnelmaker_horizontal_direction = advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)
 	
 	-- skip first pos if there is already a rail
-	start_on_rail = advtrain_helpers.is_advtrains_rail_at_pos_or_below(start_pos)
+	local start_on_rail = advtrain_helpers.is_advtrains_rail_at_pos_or_below(start_pos)
 	if advtrain_helpers.is_advtrains_rail_at_pos_or_below(start_pos) then
 		current_pos = vector.add(current_pos, direction_delta)
 		if direction_delta.y > 0 then
@@ -178,7 +161,7 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 		current_pos = vector.add(current_pos, direction_delta)
 	end
 	
-	is_first = true
+	local is_first = true
 	
 	while math.abs(current_pos.x - end_pos.x) > 1/2 or math.abs(current_pos.z - end_pos.z) > 1/2 do
 		tunnelmaker_vertical_direction = 0

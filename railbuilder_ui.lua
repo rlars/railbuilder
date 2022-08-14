@@ -114,16 +114,6 @@ local function trace_player_view(player, directions)
 	end
 end
 
--- returns the position where the start marker had been
-function remove_railbuilder_start_marker(player)
-	local player_data = railbuilder.datastore.get_data(player)
-	
-	local old_start_marker = player_data.railbuilder_start_marker
-	
-	player_data.railbuilder_start_marker = nil
-	old_start_marker:remove()
-end
-
 local function length_2d(v)
 	return math.sqrt(v.x * v.x + v.z * v.z)
 end
@@ -148,7 +138,7 @@ local function update_hud_track_preview_points(player, rail_start_pos, direction
 				end_i = 9 / step_size
 				step_multiplier = math.max(math.floor(distance_to_start_pos_2d / step_size - 1/2*end_i), 1)
 				for i=0,end_i do
-					point_pos = vector.add(target_pos, vector.multiply(dir_step, step_multiplier + i))
+					point_pos = vector.add(rail_start_pos, vector.multiply(dir_step, step_multiplier + i))
 					table.insert(player_data.ui.hud_track_preview_points,
 						{
 							id = show_possible_endpoints(player, point_pos, "#44FF44"),
@@ -163,18 +153,25 @@ end
 function update_hud(player, force)
 	local player_data = railbuilder.datastore.get_data(player)
 	local start_pos = player_data.railbuilder_start_pos
+
+	if player:get_player_control().dig then
+		force = update_slope_selection_ui(player) or force
+	else
+		hide_slope_selection_ui(player)
+	end
+
 	-- nothing to update if player did not move
 	if force or vector.distance(player_data.ui.hud_update_last_player_pos, player:get_pos()) > 1 then
 		remove_hud_track_preview_points(player)
 		
-		if player_data.railbuilder_start_marker then
+		if is_start_marker_valid(player) then
 			local directions = advtrain_helpers.get_advtrains_dirs(start_pos, player_data.railbuilder_last_direction, player_data.railbuilder_last_vertical_direction) or
 					advtrain_helpers.get_closest_directions(player, start_pos)
 			update_hud_track_preview_points(player, start_pos, directions)
 			player_data.ui.hud_track_preview_directions = directions
 		end
 	end
-	if player_data.railbuilder_start_marker then
+	if is_start_marker_valid(player) then
 		trace_player_view(player, player_data.ui.hud_track_preview_directions)
 	end
 end
@@ -325,6 +322,33 @@ function hide_slope_selection_ui(player)
 	player_data.ui.slope_selection_is_showing = false
 end
 
+function set_start_marker(player, position, direction_delta)
+	local player_data = railbuilder.datastore.get_data(player)
+	local railbuilder_start_marker_pos = vector.new(position.x, position.y, position.z)
+	-- for positive slope, move the start marker a little bit down
+	if direction_delta and direction_delta.y > 0 then railbuilder_start_marker_pos.y = railbuilder_start_marker_pos.y - direction_delta.y end
+	player_data.ui.railbuilder_start_marker = minetest.add_entity(railbuilder_start_marker_pos, "railbuilder:selection")
+end
+
+function remove_start_marker(player)
+	local player_data = railbuilder.datastore.get_data(player)
+	
+	local old_start_marker = player_data.ui.railbuilder_start_marker
+	
+	player_data.ui.railbuilder_start_marker = nil
+	old_start_marker:remove()
+end
+
+function is_start_marker_valid(player)
+	local player_data = railbuilder.datastore.get_data(player)
+	return player_data.ui.railbuilder_start_marker and player_data.ui.railbuilder_start_marker:get_luaentity() ~= nil
+end
+
+-- returns true if the start marker exists but is unloaded because it is too far away
+function is_start_marker_lost(player)
+	local player_data = railbuilder.datastore.get_data(player)
+	return player_data.ui.railbuilder_start_marker and not player_data.ui.railbuilder_start_marker:get_luaentity()
+end
 
 minetest.register_entity("railbuilder:selection", SelectionEntity)
 
