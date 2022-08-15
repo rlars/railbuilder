@@ -4,18 +4,7 @@ ADVTRAINS_RAILS_STRAIGHT2 = { "advtrains:dtrack_vst1", "advtrains:dtrack_vst2" }
 ADVTRAINS_RAILS_STRAIGHT3 = { "advtrains:dtrack_vst31", "advtrains:dtrack_vst32", "advtrains:dtrack_vst33" }
 ADVTRAINS_RAILS_DIAGONAL = { "advtrains:dtrack_vst1_45", "advtrains:dtrack_vst2_45" }
 
-function fixed_atan(y, x)
-	local v = math.atan(y/x)
-	if y >= 0 and x < 0 then return v + math.pi end
-	if y < 0 and x < 0 then return v - math.pi end
-	return v
-end
-
-function signum(x)
-	if x < 0 then return -1 end
-	if x > 0 then return 1 end
-	return 0
-end
+local signum = math.sign
 
 -- calculate the slope of a given vector
 function calc_slope(delta_pos)
@@ -39,7 +28,7 @@ function delta_to_dir(delta_pos)
 end
 
 local function node_is_advtrains_rail(node)
-	return string.match(node.name, "advtrains:dtrack")
+	return advtrains.is_track_and_drives_on(node.name)
 end
 
 local function is_advtrains_rail_at_pos_or_below(pos)
@@ -48,7 +37,7 @@ end
 
 -- returns advtrains connection index (a value from 0 to 15)
 local function direction_delta_to_advtrains_conn(direction_delta)
-	return (math.floor(fixed_atan(direction_delta.x,direction_delta.z) / math.pi * 8 + 0.5)) % 16
+	return (math.floor(math.atan2(direction_delta.x,direction_delta.z) / math.pi * 8 + 0.5)) % 16
 end
 
 -- create a list of steps that can be added when showing possible end points
