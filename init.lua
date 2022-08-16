@@ -178,6 +178,17 @@ local function can_overwrite_track_at(player, pos, newnode)
 	return newnode
 end
 
+local function try_build(player, pos, newnode)
+	local place_current, errmsg = can_overwrite_track_at(player, pos, newnode)
+	if place_current then
+		advtrains.ndb.swap_node(pos, place_current)
+	end
+	if errmsg then
+		minetest.chat_send_player(player:get_player_name(), errmsg)
+	end
+	return place_current
+end
+
 -- build a rail with a fixed direction
 function build_rail(player, start_pos, end_pos, build_last_node)
 	local delta_pos = vector.subtract(end_pos, start_pos)
@@ -204,27 +215,21 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
 		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
-		local place_current, errmsg = can_overwrite_track_at(player, current_pos, rail_node_params_seq())
-		if place_current then
-			advtrains.ndb.swap_node(current_pos, place_current)
-			if is_first then
+		local built = try_build(player, current_pos, rail_node_params_seq())
+		if is_first then
+			is_first = false
+			if built then
 				advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
 			end
 		end
-		if errmsg then
-			minetest.chat_send_player(player:get_player_name(), errmsg)
-		end
-		is_first = false
 		current_pos = vector.add(current_pos, direction_delta)
 	end
 	
 	-- place last node only if building on same level or down, as the end point is the start of a ramp
 	if build_last_node then
 		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, 0)
-		advtrains.ndb.swap_node(current_pos, rail_node_params_seq())
-	
-		-- if only one rail is placed, then this was not called yet
-		if is_first then
+		if try_build(player, current_pos, rail_node_params_seq()) and is_first then
+			-- if only one rail is placed, then this was not called yet
 			-- bend start rail (if any)
 			advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
 		end
