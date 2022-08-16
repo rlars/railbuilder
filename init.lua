@@ -142,16 +142,19 @@ function can_build_rail(start_pos, end_pos)
 	return false
 end
 
+local function can_dig(pos, player)
+	return (minetest.registered_nodes[advtrains.ndb.get_node(pos).name].can_dig or function() return true end)(pos, player)
+end
+
 --[[
 Checks if it is "appropriate" to change the node at <pos> to <newnode>
 Returns: new node (may be adjusted for e.g. turnouts or crossings), error message for the player
 --]]
-local function can_overwrite_track_at(pos, newnode)
+local function can_overwrite_track_at(player, pos, newnode)
 	local oldnode = advtrains.ndb.get_node(pos)
 	local oldname, oldparam2, newname, newparam2 = oldnode.name, oldnode.param2, newnode.name, newnode.param2
-	local can_dig, errmsg = advtrains.can_dig_or_modify_track(pos)
-	if not can_dig then
-		return false, S("Cannot modify @1: @2", minetest.pos_to_string(pos), errmsg)
+	if not can_dig(pos, player) then
+		return false, S("Cannot modify the node at @1", minetest.pos_to_string(pos))
 	end
 	if oldname == newname and oldparam2 == newparam2 then
 		return false
@@ -181,7 +184,6 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 	local rail_node_params_seq = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
 	local direction_delta = delta_to_dir(delta_pos)
 	local current_pos = table.copy(start_pos)
-	current_pos.y = current_pos.y - 0.2 -- decrement a little bit, because y values will be rounded for slope placement
 	local tunnelmaker_horizontal_direction = advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)
 	
 	-- skip first pos if there is already a rail
@@ -202,7 +204,7 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
 		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
-		local place_current, errmsg = can_overwrite_track_at(current_pos, rail_node_params_seq())
+		local place_current, errmsg = can_overwrite_track_at(player, current_pos, rail_node_params_seq())
 		if place_current then
 			advtrains.ndb.swap_node(current_pos, place_current)
 			if is_first then
