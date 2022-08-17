@@ -2,7 +2,7 @@
 A Minetest mod to build rails with tunnels and bridges with a simple click.
 
 ## Current state
-Currently, you will have to modify the tunnelmaker mod on your machine for this mod to work. See https://github.com/rlars/railbuilder/issues/1 for more information.
+Please update to the newest version of tunnelmaker to be able to use this mod.
 
 ### How to use it?
 - Use the trainmarker tool to mark the start of a rail with a right click.
