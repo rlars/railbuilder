@@ -4,8 +4,6 @@ ADVTRAINS_RAILS_STRAIGHT2 = { "advtrains:dtrack_vst1", "advtrains:dtrack_vst2" }
 ADVTRAINS_RAILS_STRAIGHT3 = { "advtrains:dtrack_vst31", "advtrains:dtrack_vst32", "advtrains:dtrack_vst33" }
 ADVTRAINS_RAILS_DIAGONAL = { "advtrains:dtrack_vst1_45", "advtrains:dtrack_vst2_45" }
 
-local signum = math.sign
-
 -- calculate the slope of a given vector
 function calc_slope(delta_pos)
 	if delta_pos.x == 0 then return delta_pos.y / math.abs(delta_pos.z) end
@@ -16,15 +14,15 @@ end
 -- return a vector with the step width of 1 or 2 in x and z dimension and a fractional y dimension
 function delta_to_dir(delta_pos)
 	local slope = calc_slope(delta_pos)
-	if delta_pos.x == 0 then return vector.new(0, slope, signum(delta_pos.z)) end
-	if delta_pos.z == 0 then return vector.new(signum(delta_pos.x), slope, 0) end
+	if delta_pos.x == 0 then return vector.new(0, slope, math.sign(delta_pos.z)) end
+	if delta_pos.z == 0 then return vector.new(math.sign(delta_pos.x), slope, 0) end
 	if math.abs(delta_pos.x) == 2 * math.abs(delta_pos.z) then
-		return vector.new(2 * signum(delta_pos.x), slope, signum(delta_pos.z))
+		return vector.new(2 * math.sign(delta_pos.x), slope, math.sign(delta_pos.z))
 	end	
 	if 2 * math.abs(delta_pos.x) == math.abs(delta_pos.z) then
-		return vector.new(signum(delta_pos.x), slope, 2 * signum(delta_pos.z))
+		return vector.new(math.sign(delta_pos.x), slope, 2 * math.sign(delta_pos.z))
 	end
-	return vector.new(signum(delta_pos.x), slope, signum(delta_pos.z))
+	return vector.new(math.sign(delta_pos.x), slope, math.sign(delta_pos.z))
 end
 
 local function node_is_advtrains_rail(node)
@@ -88,7 +86,7 @@ local function rotation_index_and_vertical_direction_to_advtrains_dir(rotation_i
 		local multiplier = 1/math.abs(vertical_direction)
 		return vector.multiply( vector.add(plain_dir, vector.new(0, vertical_direction, 0)), multiplier)
 	elseif rotation_index % 4 == 2 then
-		return vector.multiply( vector.add(plain_dir, vector.new(0, signum(vertical_direction)*1/2, 0)), 2)
+		return vector.multiply( vector.add(plain_dir, vector.new(0, math.sign(vertical_direction)*1/2, 0)), 2)
 	else
 		return nil
 	end
@@ -177,7 +175,7 @@ local function direction_step_to_rail_params_sequence(dir_step)
 		elseif rotation_index_mod == 2 then
 			rail_node_names = ADVTRAINS_RAILS_DIAGONAL
 		end
-		local increment = signum(dir_step.y)
+		local increment = math.sign(dir_step.y)
 		local rail_name_table_length = #rail_node_names
 		local i = (increment == -1 and rail_name_table_length - 1) or 0
 		return function()
