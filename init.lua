@@ -153,6 +153,7 @@ Returns: new node (may be adjusted for e.g. turnouts or crossings), error messag
 local function can_overwrite_track_at(player, pos, newnode)
 	local oldnode = advtrains.ndb.get_node(pos)
 	local oldname, oldparam2, newname, newparam2 = oldnode.name, oldnode.param2, newnode.name, newnode.param2
+	local oldndef = minetest.registered_nodes[oldname]
 	if not can_dig(pos, player) then
 		return false, S("Cannot modify the node at @1", minetest.pos_to_string(pos))
 	end
@@ -164,6 +165,9 @@ local function can_overwrite_track_at(player, pos, newnode)
 	end
 	if not advtrains.is_track_and_drives_on(newname) then
 		return false, S("@1 is not a track", quote_string(newname))
+	end
+	if next(oldndef.advtrains or {}) ~= nil then
+		return false, S("the track at @1 is a feature track", minetest.pos_to_string(pos))
 	end
 	local oldconns, _, oldtype = advtrains.get_track_connections(oldname, oldparam2)
 	local newconns, _, newtype = advtrains.get_track_connections(newname, newparam2)
@@ -184,6 +188,9 @@ local function try_build(player, pos, newnode)
 		advtrains.ndb.swap_node(pos, place_current)
 	end
 	if errmsg then
+		if not place_current then
+			errmsg = S("Not modifying @1: @2", minetest.pos_to_string(pos), errmsg)
+		end
 		minetest.chat_send_player(player:get_player_name(), errmsg)
 	end
 	return place_current
