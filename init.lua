@@ -65,8 +65,7 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 		local can_build = can_build_rail(railbuilder_start_pos, target_pos)
 
 		if not tunnelmaker_helpers.is_supported_tunnelmaker_version() then
-			minetest.chat_send_player(user:get_player_name(), "Sorry for the confusion, but this version of tunnelmaker is not supported! Look at the documentation of railbuilder for information on how to fix this: https://github.com/rlars/railbuilder")
-		elseif can_build then
+			minetest.chat_send_player(user:get_player_name(), "This version of tunnelmaker is not supported! Please update tunnelmaker.
 			build_rail(user, railbuilder_start_pos, target_pos, true or delta_pos.y <= 0)
 			did_build = true
 			if delta_pos.y > 0 then
