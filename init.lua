@@ -4,6 +4,7 @@ railbuilder_path = minetest.get_modpath("railbuilder")
 
 advtrain_helpers = dofile(railbuilder_path.."/advtrain_helpers.lua");
 tunnelmaker_helpers = dofile(railbuilder_path.."/tunnelmaker_helpers.lua");
+math_helpers = dofile(railbuilder_path.."/math_helpers.lua");
 
 dofile(railbuilder_path.."/railbuilder_datastore.lua");
 dofile(railbuilder_path.."/railbuilder_ui.lua");
@@ -52,6 +53,7 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 	
 	local did_try_build = false
 	local did_build = false
+	local direction_delta = nil
 	
 	if is_start_marker_valid(user) then
 		did_try_build = true
@@ -59,7 +61,7 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 		
 		local railbuilder_start_pos = player_data.railbuilder_start_pos		
 		local delta_pos = vector.subtract(target_pos, railbuilder_start_pos)
-		local direction_delta = delta_to_dir(delta_pos)
+		direction_delta = delta_to_dir(delta_pos)
 		local can_build = can_build_rail(railbuilder_start_pos, target_pos)
 
 		if not tunnelmaker_helpers.is_supported_tunnelmaker_version() then
@@ -120,18 +122,18 @@ function can_build_rail(start_pos, end_pos)
 	
 	local delta_pos = vector.subtract(end_pos, start_pos)
 	
-	if delta_pos.x ~= 0 and delta_pos.z ~= 0 and table.indexof(valid_xz_ratios, delta_pos.x / delta_pos.z) ~= -1 then
+	if delta_pos.x ~= 0 and delta_pos.z ~= 0 and math_helpers.table_contains_number(valid_xz_ratios, delta_pos.x / delta_pos.z) then
 		if math.abs(delta_pos.x) == math.abs(delta_pos.z) then
-			xz = math.sqrt(delta_pos.x * delta_pos.x + delta_pos.z * delta_pos.z)
-			return table.indexof(valid_xzy_ratios, delta_pos.y/xz) ~= -1
+			local xz = math.sqrt(delta_pos.x * delta_pos.x + delta_pos.z * delta_pos.z)
+			return math_helpers.table_contains_number(valid_xzy_ratios, delta_pos.y/xz)
 		end
 		-- diagonal with 30 or 60 degrees must have 0 slope
 		return delta_pos.y == 0
 	end
-	if delta_pos.x ~= 0 and delta_pos.z == 0 and table.indexof(valid_dy_ratios, delta_pos.y / delta_pos.x) ~= -1 then
+	if delta_pos.x ~= 0 and delta_pos.z == 0 and math_helpers.table_contains_number(valid_dy_ratios, delta_pos.y / delta_pos.x) then
 		return true
 	end
-	if delta_pos.x == 0 and delta_pos.z ~= 0 and table.indexof(valid_dy_ratios, delta_pos.y / delta_pos.z) ~= -1 then
+	if delta_pos.x == 0 and delta_pos.z ~= 0 and math_helpers.table_contains_number(valid_dy_ratios, delta_pos.y / delta_pos.z) then
 		return true
 	end
 	return false
@@ -164,7 +166,7 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 	local is_first = true
 	
 	while math.abs(current_pos.x - end_pos.x) > 1/2 or math.abs(current_pos.z - end_pos.z) > 1/2 do
-		tunnelmaker_vertical_direction = 0
+		local tunnelmaker_vertical_direction = 0
 		if math.floor(current_pos.y) ~= math.floor(current_pos.y - direction_delta.y) then
 			tunnelmaker_vertical_direction = signum(direction_delta.y)
 		end

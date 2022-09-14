@@ -1,3 +1,5 @@
+math_helpers = dofile(railbuilder_path.."/math_helpers.lua");
+
 ADVTRAINS_RAILS_STRAIGHT2 = { "advtrains:dtrack_vst1", "advtrains:dtrack_vst2" }
 ADVTRAINS_RAILS_STRAIGHT3 = { "advtrains:dtrack_vst31", "advtrains:dtrack_vst32", "advtrains:dtrack_vst33" }
 ADVTRAINS_RAILS_DIAGONAL = { "advtrains:dtrack_vst1_45", "advtrains:dtrack_vst2_45" }
@@ -151,13 +153,13 @@ local function get_advtrains_dirs(original_pos, last_horizontal_direction, last_
 	return p_rails
 end
 
-
 -- returns closure that generates item name and params to place a rail in the given direction
 local function direction_step_to_rail_params_sequence(dir_step)
 	local rotation_index = direction_delta_to_advtrains_conn(dir_step) -- maps to values from [0 to 15]
 	local rotation_index_mod = rotation_index % 4
 	local rotation_index_whole = math.floor(rotation_index / 4)
 	if dir_step.y == 0 then
+		local rail_name = nil
 		if rotation_index_mod == 0 then
 			rail_name = "advtrains:dtrack_st"
 		end
@@ -179,9 +181,9 @@ local function direction_step_to_rail_params_sequence(dir_step)
 			rotation_index_whole = (rotation_index_whole + 2) % 4
 		end
 		local rail_node_names = nil
-		if rotation_index_mod == 0 and math.abs(slope) == 0.5 then
+		if rotation_index_mod == 0 and math_helpers.is_number_close_to(math.abs(slope), 0.5) then
 			rail_node_names = ADVTRAINS_RAILS_STRAIGHT2
-		elseif rotation_index_mod == 0 and math.abs(slope) == 1/3 then
+		elseif rotation_index_mod == 0 and math_helpers.is_number_close_to(math.abs(slope), 1/3) then
 			rail_node_names = ADVTRAINS_RAILS_STRAIGHT3
 		elseif rotation_index_mod == 2 then
 			rail_node_names = ADVTRAINS_RAILS_DIAGONAL
