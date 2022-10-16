@@ -151,7 +151,7 @@ end
 Checks if it is "appropriate" to change the node at <pos> to <newnode>
 Returns: new node (may be adjusted for e.g. turnouts or crossings), error message for the player
 --]]
-local function can_overwrite_track_at(player, pos, newnode)
+local function can_overwrite_track_at(player, pos, newnode, no_overwrite)
 	local oldnode = advtrains.ndb.get_node(pos)
 	local oldname, oldparam2, newname, newparam2 = oldnode.name, oldnode.param2, newnode.name, newnode.param2
 	local oldndef = minetest.registered_nodes[oldname]
@@ -172,6 +172,9 @@ local function can_overwrite_track_at(player, pos, newnode)
 	end
 	local oldconns, _, oldtype = advtrains.get_track_connections(oldname, oldparam2)
 	local newconns, _, newtype = advtrains.get_track_connections(newname, newparam2)
+	if oldtype and no_overwrite then
+		return false
+	end
 	if oldtype ~= newtype then
 		return false, S("The track at @1 is of a different type than @2", minetest.pos_to_string(pos), quote_string(newname))
 	elseif #oldconns > #newconns then
@@ -183,8 +186,8 @@ local function can_overwrite_track_at(player, pos, newnode)
 	return newnode
 end
 
-local function try_build(player, pos, newnode)
-	local place_current, errmsg = can_overwrite_track_at(player, pos, newnode)
+local function try_build(player, pos, newnode, no_overwrite)
+	local place_current, errmsg = can_overwrite_track_at(player, pos, newnode, no_overwrite)
 	if place_current then
 		advtrains.ndb.swap_node(pos, place_current)
 	end
@@ -215,7 +218,7 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 		current_pos = vector.add(current_pos, direction_delta)
 	end
 	
-	local is_first = true
+	local build_count, build_successful_count = 0, 0
 
 	while math.abs(current_pos.x - end_pos.x) > 1/2 or math.abs(current_pos.z - end_pos.z) > 1/2 do
 		local tunnelmaker_vertical_direction = 0
@@ -223,10 +226,11 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
 		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
-		local built = try_build(player, current_pos, rail_node_params_seq())
-		if is_first then
-			is_first = false
-			if built then
+		local built = try_build(player, current_pos, rail_node_params_seq(), build_count == 0)
+		build_count = build_count + 1
+		if built then
+			build_successful_count = build_successful_count + 1
+			if build_count == 2 then
 				advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
 			end
 		end
@@ -236,12 +240,17 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 	-- place last node only if building on same level or down, as the end point is the start of a ramp
 	if build_last_node then
 		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, 0)
-		if try_build(player, current_pos, rail_node_params_seq()) and is_first then
-			-- if only one rail is placed, then this was not called yet
-			-- bend start rail (if any)
-			advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
+		build_count = build_count + 1
+		if try_build(player, current_pos, rail_node_params_seq()) then
+			build_successful_count = build_successful_count + 1
+			if build_count == 2 then
+				-- if only one rail is placed, then this was not called yet
+				-- bend start rail (if any)
+				advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
+			end
 		end
 	end
+	minetest.chat_send_player(player:get_player_name(), S("Successfully built @1 piece(s) of tracks (expected @2 total)", build_successful_count, build_count))
 end
 
 function on_use_callback(_, user, pointed_thing)
