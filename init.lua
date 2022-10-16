@@ -203,30 +203,34 @@ end
 -- build a rail with a fixed direction
 function build_rail(player, start_pos, end_pos, build_last_node)
 	local delta_pos = vector.subtract(end_pos, start_pos)
-	local rail_node_params_seq = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
+	local rail_node_params_seq, slope_length = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
 	local direction_delta = delta_to_dir(delta_pos)
 	local current_pos = table.copy(start_pos)
 	local tunnelmaker_horizontal_direction = advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)
 	
-	-- skip first pos if there is already a rail
-	local start_on_rail = advtrain_helpers.is_advtrains_rail_at_pos_or_below(start_pos)
+	local step_delta = vector.copy(direction_delta)
+	step_delta.y = 0
 	if direction_delta.y > 0 then
 		-- dont build last node if building up and we start with a slope
 		build_last_node = false
 	elseif direction_delta.y < 0 then
 		-- dont build first node if building down and we start with a slope
-		current_pos = vector.add(current_pos, direction_delta)
+		current_pos = vector.add(current_pos, step_delta)
 	end
 	
 	local build_count, build_successful_count = 0, 0
 
 	while math.abs(current_pos.x - end_pos.x) > 1/2 or math.abs(current_pos.z - end_pos.z) > 1/2 do
+		local node, dy = rail_node_params_seq()
+		dy = dy or 0
+		local ry = math.floor(dy)
+		local rounded_pos = vector.add(current_pos, vector.new(0, ry, 0))
 		local tunnelmaker_vertical_direction = 0
-		if math.floor(current_pos.y) ~= math.floor(current_pos.y - direction_delta.y) then
+		if slope_length and build_count%slope_length == 1 then
 			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
-		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
-		local built = try_build(player, current_pos, rail_node_params_seq(), build_count == 0)
+		tunnelmaker_helpers.dig_tunnel(player, rounded_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
+		local built = try_build(player, rounded_pos, node, build_count == 0)
 		build_count = build_count + 1
 		if built then
 			build_successful_count = build_successful_count + 1
@@ -234,7 +238,7 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 				advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
 			end
 		end
-		current_pos = vector.add(current_pos, direction_delta)
+		current_pos = vector.add(current_pos, step_delta)
 	end
 	
 	-- place last node only if building on same level or down, as the end point is the start of a ramp

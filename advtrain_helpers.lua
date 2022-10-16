@@ -177,12 +177,13 @@ local function direction_step_to_rail_params_sequence(dir_step)
 		end
 		local increment = math.sign(dir_step.y)
 		local rail_name_table_length = #rail_node_names
-		local i = (increment == -1 and rail_name_table_length - 1) or 0
+		local i = (increment == -1 and -1) or 0
 		return function()
-			local rail_name = rail_node_names[i + 1]
-			i = (i + increment) % rail_name_table_length
-			return { name=rail_name, param1=14, param2=rotation_index_whole }
-		end
+			local rail_name = rail_node_names[i%rail_name_table_length + 1]
+			local dy = i
+			i = i + increment
+			return { name=rail_name, param1=14, param2=rotation_index_whole }, dy/rail_name_table_length
+		end, rail_name_table_length
 	end
 end
 
