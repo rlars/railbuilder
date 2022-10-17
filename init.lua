@@ -212,7 +212,7 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 	step_delta.y = 0
 	if direction_delta.y > 0 then
 		-- dont build last node if building up and we start with a slope
-		build_last_node = false
+		end_pos = vector.subtract(end_pos, step_delta)
 	elseif direction_delta.y < 0 then
 		-- dont build first node if building down and we start with a slope
 		current_pos = vector.add(current_pos, step_delta)
@@ -220,13 +220,17 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 	
 	local build_count, build_successful_count = 0, 0
 
-	while math.abs(current_pos.x - end_pos.x) > 1/2 or math.abs(current_pos.z - end_pos.z) > 1/2 do
+	while math.sign(current_pos.x - end_pos.x) ~= math.sign(delta_pos.x) or math.sign(current_pos.z - end_pos.z) ~= math.sign(delta_pos.z) do
 		local node, dy = rail_node_params_seq()
 		dy = dy or 0
 		local ry = math.floor(dy)
 		local rounded_pos = vector.add(current_pos, vector.new(0, ry, 0))
 		local tunnelmaker_vertical_direction = 0
-		if slope_length and build_count%slope_length == 1 then
+		local y_shift_at = 1
+		if direction_delta.y < 0 then
+			y_shift_at = 0
+		end
+		if slope_length and build_count%slope_length == y_shift_at then
 			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
 		tunnelmaker_helpers.dig_tunnel(player, rounded_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
@@ -239,20 +243,6 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 			end
 		end
 		current_pos = vector.add(current_pos, step_delta)
-	end
-	
-	-- place last node only if building on same level or down, as the end point is the start of a ramp
-	if build_last_node then
-		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, 0)
-		build_count = build_count + 1
-		if try_build(player, current_pos, rail_node_params_seq()) then
-			build_successful_count = build_successful_count + 1
-			if build_count == 2 then
-				-- if only one rail is placed, then this was not called yet
-				-- bend start rail (if any)
-				advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
-			end
-		end
 	end
 	minetest.chat_send_player(player:get_player_name(), S("Successfully built @1 piece(s) of tracks (expected @2 total)", build_successful_count, build_count))
 end
