@@ -71,7 +71,7 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 		if not tunnelmaker_helpers.is_supported_tunnelmaker_version() then
 			minetest.chat_send_player(user:get_player_name(), "This version of tunnelmaker is not supported! Please update tunnelmaker.")
 		elseif can_build then
-			build_rail(user, railbuilder_start_pos, target_pos, true or delta_pos.y <= 0)
+			build_rail(user, railbuilder_start_pos, target_pos)
 			did_build = true
 			if delta_pos.y > 0 then
 				-- set end pos to previous position
@@ -201,35 +201,39 @@ local function try_build(player, pos, newnode, no_overwrite)
 end
 
 -- build a rail with a fixed direction
-function build_rail(player, start_pos, end_pos, build_last_node)
+function build_rail(player, start_pos, end_pos)
 	local delta_pos = vector.subtract(end_pos, start_pos)
 	local rail_node_params_seq, slope_length = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
 	local direction_delta = delta_to_dir(delta_pos)
 	local current_pos = table.copy(start_pos)
 	local tunnelmaker_horizontal_direction = advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)
 	
-	local step_delta = vector.copy(direction_delta)
-	step_delta.y = 0
-	if direction_delta.y > 0 then
-		-- dont build last node if building up and we start with a slope
-		end_pos = vector.subtract(end_pos, step_delta)
-	elseif direction_delta.y < 0 then
-		-- dont build first node if building down and we start with a slope
-		current_pos = vector.add(current_pos, step_delta)
+	local step_delta = vector.new(direction_delta.x, 0, direction_delta.z)
+
+	local total_step_count = 0
+
+	if direction_delta.x ~= 0 then
+		total_step_count = math.floor(delta_pos.x / direction_delta.x)
+	else
+		total_step_count = math.floor(delta_pos.z / direction_delta.z)
 	end
-	
+
 	local build_count, build_successful_count = 0, 0
 
-	while math.sign(current_pos.x - end_pos.x) ~= math.sign(delta_pos.x) or math.sign(current_pos.z - end_pos.z) ~= math.sign(delta_pos.z) do
+	if advtrain_helpers.is_advtrains_rail_at_pos_or_below(start_pos) then
+		current_pos = vector.add(current_pos, step_delta)
+	elseif direction_delta.y == 0 then
+		total_step_count = total_step_count + 1
+	end
+
+	local y_shift_at = (direction_delta.y < 0 and 0) or 1
+
+	while build_count < total_step_count do
 		local node, dy = rail_node_params_seq()
 		dy = dy or 0
 		local ry = math.floor(dy)
 		local rounded_pos = vector.add(current_pos, vector.new(0, ry, 0))
 		local tunnelmaker_vertical_direction = 0
-		local y_shift_at = 1
-		if direction_delta.y < 0 then
-			y_shift_at = 0
-		end
 		if slope_length and build_count%slope_length == y_shift_at then
 			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
@@ -238,11 +242,11 @@ function build_rail(player, start_pos, end_pos, build_last_node)
 		build_count = build_count + 1
 		if built then
 			build_successful_count = build_successful_count + 1
-			if build_count == 2 then
-				advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
-			end
 		end
 		current_pos = vector.add(current_pos, step_delta)
+	end
+	if build_count > 0 then
+		advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
 	end
 	minetest.chat_send_player(player:get_player_name(), S("Successfully built @1 piece(s) of tracks (expected @2 total)", build_successful_count, build_count))
 end
