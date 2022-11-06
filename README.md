@@ -1,5 +1,6 @@
 # railbuilder
-A Minetest mod to build rails with tunnels and bridges with a simple click.
+A Minetest mod to build rails with tunnels and bridges with a simple click.<br>
+Thanks to [y5nw](https://github.com/y5nw) for contributing!
 
 ## Current state
 Please update to the newest version of tunnelmaker to be able to use this mod.
