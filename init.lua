@@ -9,6 +9,10 @@ math_helpers = dofile(railbuilder_path.."/math_helpers.lua");
 dofile(railbuilder_path.."/railbuilder_datastore.lua");
 dofile(railbuilder_path.."/railbuilder_ui.lua");
 
+local S = minetest.get_translator "railbuilder"
+local function quote_string(s)
+	return string.format("%q", s)
+end
 
 -- tries to find values for last_direction from the underlying node
 local function try_initialize_last_direction(player, pos)
@@ -65,7 +69,8 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 		local can_build = can_build_rail(railbuilder_start_pos, target_pos)
 
 		if not tunnelmaker_helpers.is_supported_tunnelmaker_version() then
-			minetest.chat_send_player(user:get_player_name(), "This version of tunnelmaker is not supported! Please update tunnelmaker.
+			minetest.chat_send_player(user:get_player_name(), "This version of tunnelmaker is not supported! Please update tunnelmaker.")
+		elseif can_build then
 			build_rail(user, railbuilder_start_pos, target_pos, true or delta_pos.y <= 0)
 			did_build = true
 			if delta_pos.y > 0 then
@@ -138,57 +143,108 @@ function can_build_rail(start_pos, end_pos)
 	return false
 end
 
+local function can_dig(pos, player)
+	return (minetest.registered_nodes[advtrains.ndb.get_node(pos).name].can_dig or function() return true end)(pos, player)
+end
+
+--[[
+Checks if it is "appropriate" to change the node at <pos> to <newnode>
+Returns: new node (may be adjusted for e.g. turnouts or crossings), error message for the player
+--]]
+local function can_overwrite_track_at(player, pos, newnode, no_overwrite)
+	local oldnode = advtrains.ndb.get_node(pos)
+	local oldname, oldparam2, newname, newparam2 = oldnode.name, oldnode.param2, newnode.name, newnode.param2
+	local oldndef = minetest.registered_nodes[oldname]
+	if not can_dig(pos, player) then
+		return false, S("Cannot modify the node at @1", minetest.pos_to_string(pos))
+	end
+	if oldname == newname and oldparam2 == newparam2 then
+		return false
+	end
+	if not advtrains.is_track_and_drives_on(oldname) then
+		return newnode
+	end
+	if not advtrains.is_track_and_drives_on(newname) then
+		return false, S("@1 is not a track", quote_string(newname))
+	end
+	if next(oldndef.advtrains or {}) ~= nil then
+		return false, S("the track at @1 is a feature track", minetest.pos_to_string(pos))
+	end
+	local oldconns, _, oldtype = advtrains.get_track_connections(oldname, oldparam2)
+	local newconns, _, newtype = advtrains.get_track_connections(newname, newparam2)
+	if oldtype and no_overwrite then
+		return false
+	end
+	if oldtype ~= newtype then
+		return false, S("The track at @1 is of a different type than @2", minetest.pos_to_string(pos), quote_string(newname))
+	elseif #oldconns > #newconns then
+		return false, S("@1 would not fit the track at @2", quote_string(newname), minetest.pos_to_string(pos))
+	end
+	if oldconns[3] and newconns[3] and type(oldconns[5]) ~= type(newconns[5]) then
+		return false, S("@1 would not fit the track at @2", quote_string(newname), minetest.pos_to_string(pos))
+	end
+	return newnode
+end
+
+local function try_build(player, pos, newnode, no_overwrite)
+	local place_current, errmsg = can_overwrite_track_at(player, pos, newnode, no_overwrite)
+	if place_current then
+		advtrains.ndb.swap_node(pos, place_current)
+	end
+	if errmsg then
+		if not place_current then
+			errmsg = S("Not modifying @1: @2", minetest.pos_to_string(pos), errmsg)
+		end
+		minetest.chat_send_player(player:get_player_name(), errmsg)
+	end
+	return place_current
+end
+
 -- build a rail with a fixed direction
 function build_rail(player, start_pos, end_pos, build_last_node)
 	local delta_pos = vector.subtract(end_pos, start_pos)
-	local rail_node_params_seq = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
+	local rail_node_params_seq, slope_length = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
 	local direction_delta = delta_to_dir(delta_pos)
 	local current_pos = table.copy(start_pos)
-	current_pos.y = current_pos.y - 0.2 -- decrement a little bit, because y values will be rounded for slope placement
 	local tunnelmaker_horizontal_direction = advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)
 	
-	-- skip first pos if there is already a rail
-	local start_on_rail = advtrain_helpers.is_advtrains_rail_at_pos_or_below(start_pos)
-	if advtrain_helpers.is_advtrains_rail_at_pos_or_below(start_pos) then
-		current_pos = vector.add(current_pos, direction_delta)
-		if direction_delta.y > 0 then
-			current_pos.y = current_pos.y - direction_delta.y
-		end
-	elseif direction_delta.y > 0 then
+	local step_delta = vector.copy(direction_delta)
+	step_delta.y = 0
+	if direction_delta.y > 0 then
 		-- dont build last node if building up and we start with a slope
-		build_last_node = false
+		end_pos = vector.subtract(end_pos, step_delta)
 	elseif direction_delta.y < 0 then
 		-- dont build first node if building down and we start with a slope
-		current_pos = vector.add(current_pos, direction_delta)
+		current_pos = vector.add(current_pos, step_delta)
 	end
 	
-	local is_first = true
-	
-	while math.abs(current_pos.x - end_pos.x) > 1/2 or math.abs(current_pos.z - end_pos.z) > 1/2 do
+	local build_count, build_successful_count = 0, 0
+
+	while math.sign(current_pos.x - end_pos.x) ~= math.sign(delta_pos.x) or math.sign(current_pos.z - end_pos.z) ~= math.sign(delta_pos.z) do
+		local node, dy = rail_node_params_seq()
+		dy = dy or 0
+		local ry = math.floor(dy)
+		local rounded_pos = vector.add(current_pos, vector.new(0, ry, 0))
 		local tunnelmaker_vertical_direction = 0
-		if math.floor(current_pos.y) ~= math.floor(current_pos.y - direction_delta.y) then
-			tunnelmaker_vertical_direction = signum(direction_delta.y)
+		local y_shift_at = 1
+		if direction_delta.y < 0 then
+			y_shift_at = 0
 		end
-		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
-		minetest.set_node(current_pos, rail_node_params_seq())
-		if is_first then
-			advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
-			is_first = false
+		if slope_length and build_count%slope_length == y_shift_at then
+			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
-		current_pos = vector.add(current_pos, direction_delta)
+		tunnelmaker_helpers.dig_tunnel(player, rounded_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
+		local built = try_build(player, rounded_pos, node, build_count == 0)
+		build_count = build_count + 1
+		if built then
+			build_successful_count = build_successful_count + 1
+			if build_count == 2 then
+				advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
+			end
+		end
+		current_pos = vector.add(current_pos, step_delta)
 	end
-	
-	-- place last node only if building on same level or down, as the end point is the start of a ramp
-	if build_last_node then
-		tunnelmaker_helpers.dig_tunnel(player, current_pos, tunnelmaker_horizontal_direction, 0)
-		minetest.set_node(current_pos, rail_node_params_seq())
-	
-		-- if only one rail is placed, then this was not called yet
-		if is_first then
-			-- bend start rail (if any)
-			advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
-		end
-	end
+	minetest.chat_send_player(player:get_player_name(), S("Successfully built @1 piece(s) of tracks (expected @2 total)", build_successful_count, build_count))
 end
 
 function on_use_callback(_, user, pointed_thing)

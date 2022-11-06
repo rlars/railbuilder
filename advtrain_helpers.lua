@@ -4,19 +4,6 @@ ADVTRAINS_RAILS_STRAIGHT2 = { "advtrains:dtrack_vst1", "advtrains:dtrack_vst2" }
 ADVTRAINS_RAILS_STRAIGHT3 = { "advtrains:dtrack_vst31", "advtrains:dtrack_vst32", "advtrains:dtrack_vst33" }
 ADVTRAINS_RAILS_DIAGONAL = { "advtrains:dtrack_vst1_45", "advtrains:dtrack_vst2_45" }
 
-function fixed_atan(y, x)
-	local v = math.atan(y/x)
-	if y >= 0 and x < 0 then return v + math.pi end
-	if y < 0 and x < 0 then return v - math.pi end
-	return v
-end
-
-function signum(x)
-	if x < 0 then return -1 end
-	if x > 0 then return 1 end
-	return 0
-end
-
 -- calculate the slope of a given vector
 function calc_slope(delta_pos)
 	if delta_pos.x == 0 then return delta_pos.y / math.abs(delta_pos.z) end
@@ -27,19 +14,19 @@ end
 -- return a vector with the step width of 1 or 2 in x and z dimension and a fractional y dimension
 function delta_to_dir(delta_pos)
 	local slope = calc_slope(delta_pos)
-	if delta_pos.x == 0 then return vector.new(0, slope, signum(delta_pos.z)) end
-	if delta_pos.z == 0 then return vector.new(signum(delta_pos.x), slope, 0) end
+	if delta_pos.x == 0 then return vector.new(0, slope, math.sign(delta_pos.z)) end
+	if delta_pos.z == 0 then return vector.new(math.sign(delta_pos.x), slope, 0) end
 	if math.abs(delta_pos.x) == 2 * math.abs(delta_pos.z) then
-		return vector.new(2 * signum(delta_pos.x), slope, signum(delta_pos.z))
+		return vector.new(2 * math.sign(delta_pos.x), slope, math.sign(delta_pos.z))
 	end	
 	if 2 * math.abs(delta_pos.x) == math.abs(delta_pos.z) then
-		return vector.new(signum(delta_pos.x), slope, 2 * signum(delta_pos.z))
+		return vector.new(math.sign(delta_pos.x), slope, 2 * math.sign(delta_pos.z))
 	end
-	return vector.new(signum(delta_pos.x), slope, signum(delta_pos.z))
+	return vector.new(math.sign(delta_pos.x), slope, math.sign(delta_pos.z))
 end
 
 local function node_is_advtrains_rail(node)
-	return string.match(node.name, "advtrains:dtrack")
+	return advtrains.is_track_and_drives_on(node.name)
 end
 
 local function is_advtrains_rail_at_pos_or_below(pos)
@@ -48,7 +35,7 @@ end
 
 -- returns advtrains connection index (a value from 0 to 15)
 local function direction_delta_to_advtrains_conn(direction_delta)
-	return (math.floor(fixed_atan(direction_delta.x,direction_delta.z) / math.pi * 8 + 0.5)) % 16
+	return (math.floor(math.atan2(direction_delta.x,direction_delta.z) / math.pi * 8 + 0.5)) % 16
 end
 
 -- create a list of steps that can be added when showing possible end points
@@ -99,7 +86,7 @@ local function rotation_index_and_vertical_direction_to_advtrains_dir(rotation_i
 		local multiplier = 1/math.abs(vertical_direction)
 		return vector.multiply( vector.add(plain_dir, vector.new(0, vertical_direction, 0)), multiplier)
 	elseif rotation_index % 4 == 2 then
-		return vector.multiply( vector.add(plain_dir, vector.new(0, signum(vertical_direction)*1/2, 0)), 2)
+		return vector.multiply( vector.add(plain_dir, vector.new(0, math.sign(vertical_direction)*1/2, 0)), 2)
 	else
 		return nil
 	end
@@ -188,14 +175,15 @@ local function direction_step_to_rail_params_sequence(dir_step)
 		elseif rotation_index_mod == 2 then
 			rail_node_names = ADVTRAINS_RAILS_DIAGONAL
 		end
-		local increment = signum(dir_step.y)
+		local increment = math.sign(dir_step.y)
 		local rail_name_table_length = #rail_node_names
-		local i = (increment == -1 and rail_name_table_length - 1) or 0
+		local i = (increment == -1 and -1) or 0
 		return function()
-			local rail_name = rail_node_names[i + 1]
-			i = (i + increment) % rail_name_table_length
-			return { name=rail_name, param1=14, param2=rotation_index_whole }
-		end
+			local rail_name = rail_node_names[i%rail_name_table_length + 1]
+			local dy = i
+			i = i + increment
+			return { name=rail_name, param1=14, param2=rotation_index_whole }, dy/rail_name_table_length
+		end, rail_name_table_length
 	end
 end
 
