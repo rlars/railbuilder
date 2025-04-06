@@ -161,10 +161,10 @@ local function can_overwrite_track_at(player, pos, newnode, no_overwrite)
 	if oldname == newname and oldparam2 == newparam2 then
 		return false
 	end
-	if not advtrains.is_track_and_drives_on(oldname) then
+	if not advtrains.is_track(oldname) then
 		return newnode
 	end
-	if not advtrains.is_track_and_drives_on(newname) then
+	if not advtrains.is_track(newname) then
 		return false, S("@1 is not a track", quote_string(newname))
 	end
 	if next(oldndef.advtrains or {}) ~= nil then
@@ -246,7 +246,8 @@ function build_rail(player, start_pos, end_pos)
 		current_pos = vector.add(current_pos, step_delta)
 	end
 	if build_count > 0 then
-		advtrain_helpers.try_bend_rail_start(start_pos, direction_delta)
+        core.log(dump(player))
+		advtrain_helpers.try_bend_rail_start(start_pos, direction_delta, player)
 	end
 	minetest.chat_send_player(player:get_player_name(), S("Successfully built @1 piece(s) of tracks (expected @2 total)", build_successful_count, build_count))
 end

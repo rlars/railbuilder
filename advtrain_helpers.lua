@@ -26,7 +26,7 @@ function delta_to_dir(delta_pos)
 end
 
 local function node_is_advtrains_rail(node)
-	return advtrains.is_track_and_drives_on(node.name)
+	return advtrains.is_track(node.name)
 end
 
 local function is_advtrains_rail_at_pos_or_below(pos)
@@ -187,9 +187,9 @@ local function direction_step_to_rail_params_sequence(dir_step)
 	end
 end
 
-local function try_bend_rail_start(start_pos, direction_delta)
+local function try_bend_rail_start(start_pos, direction_delta, player)
 	if advtrains.trackplacer then
-		advtrains.trackplacer.bend_rail(vector.add(start_pos, direction_delta), (8 + advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)) % 16)
+        advtrains.trackplacer.place_track(start_pos, "advtrains:dtrack", player:get_player_name(), player:get_look_horizontal())
 	end
 end
 
