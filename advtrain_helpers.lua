@@ -26,7 +26,11 @@ function delta_to_dir(delta_pos)
 end
 
 local function node_is_advtrains_rail(node)
-	return advtrains.is_track(node.name)
+	if advtrains.is_track then
+		return advtrains.is_track(node.name)
+	else -- advtrains < 2.5.0
+		return advtrains.is_track_and_drives_on(node.name)
+	end
 end
 
 local function is_advtrains_rail_at_pos_or_below(pos)
@@ -187,9 +191,13 @@ local function direction_step_to_rail_params_sequence(dir_step)
 	end
 end
 
-local function try_bend_rail_start(start_pos, direction_delta, player)
+local function try_bend_rail_start(start_pos, player)
 	if advtrains.trackplacer then
-        advtrains.trackplacer.place_track(start_pos, "advtrains:dtrack", player:get_player_name(), player:get_look_horizontal())
+		if advtrains.trackplacer.place_track then
+			advtrains.trackplacer.place_track(start_pos, "advtrains:dtrack", player:get_player_name(), player:get_look_horizontal())
+		else
+			minetest.log("warning", "Cannot bend start rail, please upgrade advtrains!")
+		end
 	end
 end
 

@@ -1,11 +1,12 @@
 # railbuilder
 A Minetest mod to build rails with tunnels and bridges with a simple click.<br>
-Thanks to [y5nw](https://github.com/y5nw) for contributing!
+Thanks to [y5nw](https://github.com/y5nw) and [Montandalar](https://github.com/Montandalar) for contributing!
 
 ## Current state
 Please update to the newest version of tunnelmaker to be able to use this mod.
 
 ### How to use it?
+- Get the tool with */give railbuilder:trackmarker*.
 - Use the trainmarker tool to mark the start of a rail with a right click.
 - Right click at the desired end point (shown if you are close enough) or
 - Right click on the current start marker to stop building.
