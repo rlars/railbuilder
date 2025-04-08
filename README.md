@@ -4,6 +4,7 @@ Thanks to [y5nw](https://github.com/y5nw) and [Montandalar](https://github.com/M
 
 ## Current state
 Please update to the newest version of tunnelmaker to be able to use this mod.
+Also, use the latest advtrains version for a better experience.
 
 ### How to use it?
 - Get the tool with */giveme railbuilder:trackmarker*.
