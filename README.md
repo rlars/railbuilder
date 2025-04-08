@@ -6,7 +6,7 @@ Thanks to [y5nw](https://github.com/y5nw) and [Montandalar](https://github.com/M
 Please update to the newest version of tunnelmaker to be able to use this mod.
 
 ### How to use it?
-- Get the tool with */give railbuilder:trackmarker*.
+- Get the tool with */giveme railbuilder:trackmarker*.
 - Use the trainmarker tool to mark the start of a rail with a right click.
 - Right click at the desired end point (shown if you are close enough) or
 - Right click on the current start marker to stop building.
