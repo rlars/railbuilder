@@ -12,6 +12,7 @@ Also, use the latest advtrains version for a better experience.
 - Right click at the desired end point (shown if you are close enough) or
 - Right click on the current start marker to stop building.
 - Hold down left mouse button and look up or down to set a slope, left click to reset.
+- Hold sneak and right-click to bring up the settings. There, you can disable tunnelmaker and choose which tracks to place (standard advtrains tracks and tieless tracks currently supported).
 
 ### What does it do?
 - This will trigger tunnelmaker to build tunnels / bridges / ground according to your settings.
