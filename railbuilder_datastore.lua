@@ -28,6 +28,8 @@ function datastore.get_data(player)
 				hud_update_last_player_pos = vector.new(0, 0, 0),
 				railbuilder_start_marker = nil,
 			},
+			use_tunnelmaker = true,
+			track_style = nil,
 		}
 	end
 	return datastore._data[player]

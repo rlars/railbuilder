@@ -1,29 +1,11 @@
 math_helpers = dofile(railbuilder_path.."/math_helpers.lua");
 
-ADVTRAINS_RAILS_STRAIGHT2 = { "advtrains:dtrack_vst1", "advtrains:dtrack_vst2" }
-ADVTRAINS_RAILS_STRAIGHT3 = { "advtrains:dtrack_vst31", "advtrains:dtrack_vst32", "advtrains:dtrack_vst33" }
-ADVTRAINS_RAILS_DIAGONAL = { "advtrains:dtrack_vst1_45", "advtrains:dtrack_vst2_45" }
+local known_track_styles = {{ ui_name="AdvTrains", node_prefix="advtrains:dtrack"}, { ui_name="Tieless", node_prefix="advtrains:dtrack_tieless"}, }
 
--- calculate the slope of a given vector
-function calc_slope(delta_pos)
-	if delta_pos.x == 0 then return delta_pos.y / math.abs(delta_pos.z) end
-	if delta_pos.z == 0 then return delta_pos.y / math.abs(delta_pos.x) end
-	return delta_pos.y / math.abs(math.sqrt(1/2 * (delta_pos.x * delta_pos.x + delta_pos.z * delta_pos.z)))
-end
-
--- return a vector with the step width of 1 or 2 in x and z dimension and a fractional y dimension
-function delta_to_dir(delta_pos)
-	local slope = calc_slope(delta_pos)
-	if delta_pos.x == 0 then return vector.new(0, slope, math.sign(delta_pos.z)) end
-	if delta_pos.z == 0 then return vector.new(math.sign(delta_pos.x), slope, 0) end
-	if math.abs(delta_pos.x) == 2 * math.abs(delta_pos.z) then
-		return vector.new(2 * math.sign(delta_pos.x), slope, math.sign(delta_pos.z))
-	end	
-	if 2 * math.abs(delta_pos.x) == math.abs(delta_pos.z) then
-		return vector.new(math.sign(delta_pos.x), slope, 2 * math.sign(delta_pos.z))
-	end
-	return vector.new(math.sign(delta_pos.x), slope, math.sign(delta_pos.z))
-end
+local advtrains_track_flat_suffix = advtrains.ap.t_30deg_flat.rotation
+local advtrains_track_slope_straight2_suffix = advtrains.ap.t_30deg_slope.slopeplacer[2]
+local advtrains_track_slope_straight3_suffix = advtrains.ap.t_30deg_slope.slopeplacer[3]
+local advtrains_track_slope_diagonal_suffix = advtrains.ap.t_30deg_slope.slopeplacer_45[2]
 
 local function node_is_advtrains_rail(node)
 	if advtrains.is_track then
@@ -55,27 +37,9 @@ local function get_closest_directions(player, rail_start_pos)
 end
 
 -- generate a vector in the plain
--- rotation_index values -7 to 8
+-- rotation_index values 0 to 15
 local function rotation_index_to_advtrains_dir(rotation_index)
-	local rotation_index_mod = rotation_index % 4
-	local rotation_index_whole = math.floor(rotation_index / 4)
-	
-	local v = nil
-	if rotation_index_mod == 0 then
-		v = vector.new(0, 0, 1)
-	elseif rotation_index_mod == 1 then
-		v = vector.new(1, 0, 2)
-	elseif rotation_index_mod == 2 then
-		v = vector.new(1, 0, 1)
-	elseif rotation_index_mod == 3 then
-		v = vector.new(2, 0, 1)
-	end
-	local rot_v = vector.rotate(v, { x = 0, y = rotation_index_whole * math.pi / 2, z = 0 })
-	if rotation_index_whole == 1 or rotation_index_whole == 3 then
-		-- some bug in Minetest version 5.4 ...
-		return vector.subtract(vector.new(), rot_v)
-	end
-	return rot_v
+	return advtrains.dir_to_vector(rotation_index)
 end
 
 -- generate a vector in 3D
@@ -96,7 +60,6 @@ local function rotation_index_and_vertical_direction_to_advtrains_dir(rotation_i
 	end
 end
 
--- TODO: tried with rail_and_can_be_bent from advtrains/trackplacer.lua first, but this did not work - can we improve this?
 -- returns possible directions starting from a given track at pos
 local function get_advtrains_dirs(original_pos, last_horizontal_direction, last_vertical_direction)
 	local p_rails={}
@@ -110,11 +73,10 @@ local function get_advtrains_dirs(original_pos, last_horizontal_direction, last_
 	if not node or not node_is_advtrains_rail(node) then return nil end
 	
 	local cconns=advtrains.get_track_connections(node.name, node.param2)
-	
 	for _, conn in ipairs(cconns) do
 		table.insert(p_rails, conn.c)
 	end
-	
+
 	if #p_rails == 2 then
 		local a = p_rails[1]
 		local b = p_rails[2]
@@ -131,53 +93,42 @@ local function get_advtrains_dirs(original_pos, last_horizontal_direction, last_
 		end
 		table.insert_all(p_rails, more_conns)
 	end
-	
-	--if false then return p_rails end
-	--p_rails = {}
-	--tp = advtrains.trackplacer
-	--for i = 0, 15 do
-	--	pos = vector.add(original_pos, rotation_index_to_advtrains_dir(i))
-	--	if tp.rail_and_can_be_bent(pos, (i+8)%16) then
-	--		table.insert(p_rails, i)
-	--	end
-	--end
+
+
 	return p_rails
 end
 
+local function make_slope_node_names(name_prefix, suffix_list)
+	local names = {}
+	for _, suffix in ipairs(suffix_list) do
+		table.insert(names, name_prefix .. "_" .. suffix)
+	end
+
+	return names
+end
+
 -- returns closure that generates item name and params to place a rail in the given direction
-local function direction_step_to_rail_params_sequence(dir_step)
+local function direction_step_to_rail_params_sequence(dir_step, name_prefix)
 	local rotation_index = direction_delta_to_advtrains_conn(dir_step) -- maps to values from [0 to 15]
 	local rotation_index_mod = rotation_index % 4
 	local rotation_index_whole = math.floor(rotation_index / 4)
 	if dir_step.y == 0 then
-		local rail_name = nil
-		if rotation_index_mod == 0 then
-			rail_name = "advtrains:dtrack_st"
-		end
-		if rotation_index_mod == 1 then
-			rail_name = "advtrains:dtrack_st_30"
-		end
-		if rotation_index_mod == 2 then
-			rail_name = "advtrains:dtrack_st_45"
-		end
-		if rotation_index_mod == 3 then
-			rail_name = "advtrains:dtrack_st_60"
-		end
+		local rail_name = name_prefix .. "_st" .. advtrains_track_flat_suffix[rotation_index_mod + 1]
 		return function()
 			return { name=rail_name, param1=14, param2=rotation_index_whole }
 		end
 	else
-		local slope = calc_slope(dir_step)
+		local slope = math_helpers.calc_slope(dir_step)
 		if dir_step.y < 0 then
 			rotation_index_whole = (rotation_index_whole + 2) % 4
 		end
 		local rail_node_names = nil
 		if rotation_index_mod == 0 and math_helpers.is_number_close_to(math.abs(slope), 0.5) then
-			rail_node_names = ADVTRAINS_RAILS_STRAIGHT2
+			rail_node_names = make_slope_node_names(name_prefix, advtrains_track_slope_straight2_suffix)
 		elseif rotation_index_mod == 0 and math_helpers.is_number_close_to(math.abs(slope), 1/3) then
-			rail_node_names = ADVTRAINS_RAILS_STRAIGHT3
+			rail_node_names = make_slope_node_names(name_prefix, advtrains_track_slope_straight3_suffix)
 		elseif rotation_index_mod == 2 then
-			rail_node_names = ADVTRAINS_RAILS_DIAGONAL
+			rail_node_names = make_slope_node_names(name_prefix, advtrains_track_slope_diagonal_suffix)
 		end
 		local increment = math.sign(dir_step.y)
 		local rail_name_table_length = #rail_node_names
@@ -191,17 +142,17 @@ local function direction_step_to_rail_params_sequence(dir_step)
 	end
 end
 
-local function try_bend_rail_start(start_pos, player)
+local function try_bend_rail_start(start_pos, player, track_node_prefix)
 	if advtrains.trackplacer then
 		if advtrains.trackplacer.place_track then
-			advtrains.trackplacer.place_track(start_pos, "advtrains:dtrack", player:get_player_name(), player:get_look_horizontal())
+			advtrains.trackplacer.place_track(start_pos, track_node_prefix, player:get_player_name(), player:get_look_horizontal())
 		else
 			minetest.log("warning", "Cannot bend start rail, please upgrade advtrains!")
 		end
 	end
 end
 
--- rturns a pair of booleans indicating if the rails in the direction or its opposite are connected
+-- returns a pair of booleans indicating if the rails in the direction or its opposite are connected
 local function find_already_connected(pos)
 	if advtrains.trackplacer then
 		return advtrains.trackplacer.find_already_connected(pos, direction)
@@ -209,32 +160,31 @@ local function find_already_connected(pos)
 	return false, false
 end
 
-local function node_is_end_of_upper_slope(node)
-	return table.indexof(ADVTRAINS_RAILS_STRAIGHT2, node.name) == 2 or
-			table.indexof(ADVTRAINS_RAILS_STRAIGHT3, node.name) == 3 or
-			table.indexof(ADVTRAINS_RAILS_DIAGONAL, node.name) == 2
+-- return horizontal direction in [0, 15] and vertical direction in {-1/2,-1/3,0,1/3,1/2}
+local function node_params_to_directions(node, get_opposite)
+	if not node_is_advtrains_rail(node) then return nil, nil end
+	local conns, _ = advtrains.get_track_connections(node.name, node.param2)
+	local adv_hor = get_opposite and conns[2].c or conns[1].c
+	local adv_vert = conns[1].y and (conns[1].y - conns[2].y) or 0
+	if adv_vert >= -0.34 and adv_vert <= -0.33 then adv_vert = -1/3 end
+	if adv_vert >= 0.33 and adv_vert <= 0.34 then adv_vert = 1/3 end
+	return adv_hor, adv_vert
 end
 
--- return horizontal direction in [0, 15] and vertical direction in {-1/2,-1/3,0,1/3,1/2}
-local function node_params_to_directions(node)
-	local mod4offset = 0
-	local vertical_direction = 0
-	if node.name == "advtrains:dtrack_st_30" then mod4offset = 1
-	elseif node.name == "advtrains:dtrack_st_45" then mod4offset = 2
-	elseif node.name == "advtrains:dtrack_st_60" then mod4offset = 3
-	elseif table.indexof(ADVTRAINS_RAILS_STRAIGHT2, node.name) == 1 then vertical_direction = -1/2
-	elseif table.indexof(ADVTRAINS_RAILS_STRAIGHT2, node.name) == 2 then vertical_direction = 1/2
-	elseif table.indexof(ADVTRAINS_RAILS_STRAIGHT3, node.name) == 1 then vertical_direction = -1/3
-	elseif table.indexof(ADVTRAINS_RAILS_STRAIGHT3, node.name) == 3 then vertical_direction = 1/3
-	elseif table.indexof(ADVTRAINS_RAILS_DIAGONAL, node.name) > 0 then
-		mod4offset = 2
-		if table.indexof(ADVTRAINS_RAILS_DIAGONAL, node.name) == 1 then vertical_direction = -1/2
-		else vertical_direction = 1/2
-		end
-	end
-	-- invert direction if lower end of ramp
-	if vertical_direction < 0 then mod4offset = mod4offset + 8 end
-	return (node.param2 * 4 + mod4offset) % 16, vertical_direction
+local function node_is_end_of_upper_slope(node)
+	if not node_is_advtrains_rail(node) then return nil end
+	local conns, _ = advtrains.get_track_connections(node.name, node.param2)
+	return #conns >= 2 and (conns[1].y == 1 or conns[2].y == 1)
+end
+
+local function node_is_slope(node)
+	if not node_is_advtrains_rail(node) then return nil end
+	local conns, _ = advtrains.get_track_connections(node.name, node.param2)
+	return #conns >= 2 and (conns[1].y ~= conns[2].y)
+end
+
+local function get_track_prefix(player_data)
+	return player_data.track_style or known_track_styles[1].node_prefix
 end
 
 return {
@@ -249,5 +199,8 @@ return {
 	try_bend_rail_start = try_bend_rail_start,
 	find_already_connected = find_already_connected,
 	node_is_end_of_upper_slope = node_is_end_of_upper_slope,
+	node_is_slope = node_is_slope,
 	node_params_to_directions = node_params_to_directions,
+	known_track_styles = known_track_styles,
+	get_track_prefix = get_track_prefix,
 }

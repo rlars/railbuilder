@@ -15,15 +15,41 @@ local function quote_string(s)
 end
 
 -- tries to find values for last_direction from the underlying node
-local function try_initialize_last_direction(player, pos)
+local function try_initialize_last_direction(player, pos, get_opposite)
 	local player_data = railbuilder.datastore.get_data(player)
 	local node = minetest.get_node(pos)
-	player_data.railbuilder_last_direction, player_data.railbuilder_last_vertical_direction = advtrain_helpers.node_params_to_directions(node)
+	player_data.railbuilder_last_direction, player_data.railbuilder_last_vertical_direction = advtrain_helpers.node_params_to_directions(node, get_opposite)
+end
+
+-- Display User Options menu.
+local function show_settings_form(player)
+	local pname = player:get_player_name()
+	local player_data = railbuilder.datastore.get_data(player)
+	local selected_track_style = 1
+	local options = ""
+	for i, v in ipairs(advtrain_helpers.known_track_styles) do
+		options = options ..  v.ui_name
+		if i < #advtrain_helpers.known_track_styles then options = options.."," end
+		if v.node_prefix == player_data.track_style then selected_track_style = i end
+	end
+	
+	local formspec = "size[6.0,6.0]"..
+		"label[0.25,0.25;"..S("Settings").."]"..
+		"dropdown[0.25,1.00;4;track_selection;"..options..";"..tostring(selected_track_style)..";"..tostring(true).."]"..
+		"checkbox[0.25,1.75;use_tunnelmaker;"..S("Use tunnelmaker")..";"..tostring(player_data.use_tunnelmaker).."]"..
+		"label[0.25,2.75;"..S("Tunnelmaker settings can be changed on the respective tool.").."]"..
+		"button_exit[2,5.00;2,0.4;exit;"..S("Exit").."]"
+	minetest.show_formspec(pname, "railbuilder:settings_ui", formspec)
 end
 
 local function use_railbuilder_marker_tool(_, user, pointed_thing)
 	local player_data = railbuilder.datastore.get_data(user)
 	local target_pos = nil
+	local key_stats = user:get_player_control()
+	if key_stats.sneak then
+		show_settings_form(user)
+		return
+	end
 
 	if get_selected_position(user) then
 		target_pos = get_selected_position(user)
@@ -65,11 +91,11 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 		
 		local railbuilder_start_pos = player_data.railbuilder_start_pos		
 		local delta_pos = vector.subtract(target_pos, railbuilder_start_pos)
-		direction_delta = delta_to_dir(delta_pos)
+		direction_delta = math_helpers.delta_to_dir(delta_pos)
 		local can_build = can_build_rail(railbuilder_start_pos, target_pos)
 
-		if not tunnelmaker_helpers.is_supported_tunnelmaker_version() then
-			minetest.chat_send_player(user:get_player_name(), "This version of tunnelmaker is not supported! Please update tunnelmaker.")
+		if player_data.use_tunnelmaker and not tunnelmaker_helpers.is_supported_tunnelmaker_version() then
+			minetest.chat_send_player(user:get_player_name(), S("This version of tunnelmaker is not supported! Please update tunnelmaker or disable it in the tool settings."))
 		elseif can_build then
 			build_rail(user, railbuilder_start_pos, target_pos)
 			did_build = true
@@ -83,7 +109,10 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 			if vector.equals(railbuilder_start_pos, target_pos) and player_data.railbuilder_last_direction ~= nil then
 				-- check target_pos and the one below if there is a rail
 				if not advtrain_helpers.is_advtrains_rail_at_pos_or_below(target_pos) then
-					minetest.set_node(target_pos, advtrain_helpers.direction_step_to_rail_params_sequence(advtrain_helpers.rotation_index_to_advtrains_dir(player_data.railbuilder_last_direction))())
+					local name_generator, _ = advtrain_helpers.direction_step_to_rail_params_sequence(
+						advtrain_helpers.rotation_index_to_advtrains_dir(player_data.railbuilder_last_direction),
+						advtrain_helpers.get_track_prefix(player_data))
+					minetest.set_node(target_pos, name_generator())
 				end
 			end
 			player_data.railbuilder_last_direction = nil
@@ -93,8 +122,9 @@ local function use_railbuilder_marker_tool(_, user, pointed_thing)
 	-- eventually continue with showing marker for next track
 	if not did_try_build or did_build then
 		if not did_try_build then
-			try_initialize_last_direction(user, target_pos)
-			if advtrain_helpers.node_is_end_of_upper_slope(minetest.get_node(target_pos)) then
+			local is_end_of_upper_slope = advtrain_helpers.node_is_end_of_upper_slope(minetest.get_node(target_pos))
+			try_initialize_last_direction(user, target_pos, is_end_of_upper_slope)
+			if is_end_of_upper_slope then
 				target_pos.y = target_pos.y + 1
 			end
 		end
@@ -111,7 +141,7 @@ function update_railbuilder_callback(dtime)
 		if is_start_marker_lost(player) then
 			-- abort if start_pos was unloaded
 			remove_start_marker(player)
-			minetest.chat_send_player(player:get_player_name(), "Railbuilder: Start point is too far away, cancelling!")
+			minetest.chat_send_player(player:get_player_name(), S("Railbuilder: Start point is too far away, cancelling!"))
 			update_hud(player, true)
 		else
 			update_hud(player, false)
@@ -203,8 +233,9 @@ end
 -- build a rail with a fixed direction
 function build_rail(player, start_pos, end_pos)
 	local delta_pos = vector.subtract(end_pos, start_pos)
-	local rail_node_params_seq, slope_length = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos)
-	local direction_delta = delta_to_dir(delta_pos)
+	local player_data = railbuilder.datastore.get_data(player)
+	local rail_node_params_seq, slope_length = advtrain_helpers.direction_step_to_rail_params_sequence(delta_pos, advtrain_helpers.get_track_prefix(player_data))
+	local direction_delta = math_helpers.delta_to_dir(delta_pos)
 	local current_pos = table.copy(start_pos)
 	local tunnelmaker_horizontal_direction = advtrain_helpers.direction_delta_to_advtrains_conn(direction_delta)
 	
@@ -226,7 +257,8 @@ function build_rail(player, start_pos, end_pos)
 		total_step_count = total_step_count + 1
 	end
 
-	local y_shift_at = (direction_delta.y < 0 and 0) or 1
+	local is_diagonal = delta_pos.x ~= 0 and delta_pos.z ~= 0
+	local y_shift_at = (direction_delta.y < 0 and not is_diagonal and 0) or 1
 
 	while build_count < total_step_count do
 		local node, dy = rail_node_params_seq()
@@ -237,7 +269,9 @@ function build_rail(player, start_pos, end_pos)
 		if slope_length and build_count%slope_length == y_shift_at then
 			tunnelmaker_vertical_direction = math.sign(direction_delta.y)
 		end
-		tunnelmaker_helpers.dig_tunnel(player, rounded_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
+		if player_data.use_tunnelmaker then
+			tunnelmaker_helpers.dig_tunnel(player, rounded_pos, tunnelmaker_horizontal_direction, tunnelmaker_vertical_direction)
+		end
 		local built = try_build(player, rounded_pos, node, build_count == 0)
 		build_count = build_count + 1
 		if built then
@@ -246,7 +280,10 @@ function build_rail(player, start_pos, end_pos)
 		current_pos = vector.add(current_pos, step_delta)
 	end
 	if build_count > 0 then
-		advtrain_helpers.try_bend_rail_start(start_pos, player)
+		local player_data = railbuilder.datastore.get_data(player)
+		if not advtrain_helpers.node_is_slope(minetest.get_node(start_pos)) and not advtrain_helpers.node_is_slope(minetest.get_node(vector.subtract(start_pos, vector.new(0, 1, 0)))) then
+			advtrain_helpers.try_bend_rail_start(start_pos, player, advtrain_helpers.get_track_prefix(player_data))
+		end
 	end
 	minetest.chat_send_player(player:get_player_name(), S("Successfully built @1 piece(s) of tracks (expected @2 total)", build_successful_count, build_count))
 end
@@ -255,9 +292,27 @@ function on_use_callback(_, user, pointed_thing)
 	show_slope_selection_ui(user)
 end
 
+minetest.register_on_player_receive_fields(function(player, formname, fields)
+	if formname ~= "railbuilder:settings_ui" then
+		return false
+	end
+	local pname = player:get_player_name()
+	local player_data = railbuilder.datastore.get_data(player)
+	if fields.use_tunnelmaker == "true" then
+		player_data.use_tunnelmaker = true
+	elseif fields.use_tunnelmaker == "false" then
+		player_data.use_tunnelmaker = false
+	end
+	if fields.track_selection then
+		player_data.track_style = advtrain_helpers.known_track_styles[tonumber(fields.track_selection)].node_prefix
+	end
+
+	return true
+end)
+
 
 minetest.register_craftitem("railbuilder:trackmarker", {
-	description = "Move",
+	description = S("Build advtrains tracks with ease."),
 	inventory_image = "railbuilder_trackmarker.png",
 	on_use = on_use_callback,
 	on_secondary_use = use_railbuilder_marker_tool,

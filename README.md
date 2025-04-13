@@ -26,6 +26,7 @@ Also, use the latest advtrains version for a better experience.
 ### Warnings and limitations
 - Expect bugs which eventually make your world unloadable!
 - Building > 10 blocks will result in lags.
+- If track nodes are out of sync with the advtrains node database, use the command */at_sync_ndb*.
 - Please report any issues you encounter.
 - No idea yet how to make this mobile-friendly.
 
